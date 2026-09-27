@@ -1,0 +1,3 @@
+import { SiteHeader } from '@/components/site-header';
+import { BulkExchange } from '@/components/bulk-exchange';
+export default function BulkPage({ params }: { params: { slug: string } }) { return <><SiteHeader /><main className="wrap"><div className="page-title"><div className="eyebrow">Organizer console</div><h1>Bulk exchange</h1><p className="muted">Download portable CSV/JSON snapshots or import validated event data.</p></div><BulkExchange slug={params.slug} /></main></>; }

@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dogfood}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dogfood}
+      POSTGRES_DB: ${POSTGRES_DB:-dogfood}
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  seed:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-dogfood}:${POSTGRES_PASSWORD:-dogfood}@db:5432/${POSTGRES_DB:-dogfood}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-local-docker-jwt-secret-change-for-production}
+      JUDGE_SIGNING_SECRET: ${JUDGE_SIGNING_SECRET:-local-docker-judge-secret-change-for-production}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+    command: [ "sh", "-c", "npm run db:setup" ]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+  web:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-dogfood}:${POSTGRES_PASSWORD:-dogfood}@db:5432/${POSTGRES_DB:-dogfood}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-local-docker-jwt-secret-change-for-production}
+      JUDGE_SIGNING_SECRET: ${JUDGE_SIGNING_SECRET:-local-docker-judge-secret-change-for-production}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      NODE_ENV: production
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+volumes:
+  postgres_data:

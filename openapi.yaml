@@ -1,0 +1,377 @@
+openapi: 3.0.3
+info:
+  title: Dogfood 2026 REST API
+  version: 1.0.0
+  description: Same-origin REST API. Protected operations use the dogfood_session httpOnly cookie.
+servers:
+  - url: http://localhost:3000/api
+tags:
+  - name: Auth
+  - name: Events
+  - name: Teams and submissions
+  - name: Judging
+  - name: Public participation
+  - name: Operations
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a participant account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [email, name, password], properties: { email: { type: string, format: email }, name: { type: string }, password: { type: string, minLength: 10 } } }
+      responses:
+        '201': { description: Participant created }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { description: Email already registered }
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate and set session cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [email, password], properties: { email: { type: string, format: email }, password: { type: string } } }
+      responses:
+        '200': { description: User profile and dogfood_session Set-Cookie }
+        '401': { $ref: '#/components/responses/Error' }
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Clear the session cookie
+      responses:
+        '200': { description: Session cleared }
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Return current user or null
+      responses:
+        '200': { description: Session profile }
+  /events:
+    get:
+      tags: [Events]
+      summary: List events
+      responses:
+        '200': { description: Event summaries }
+    post:
+      tags: [Events]
+      summary: Create event (organizer/admin)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EventCreate' }
+      responses:
+        '201': { description: Event with tracks, prizes, and criteria }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /events/{slug}:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    get:
+      tags: [Events]
+      summary: Get event details
+      responses:
+        '200': { description: Event configuration and counts }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Events]
+      summary: Update event configuration (owner/admin)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { name: { type: string }, description: { type: string }, startsAt: { type: string, format: date-time }, submissionEnds: { type: string, format: date-time }, judgingEnds: { type: string, format: date-time }, votingEnds: { type: string, format: date-time }, teamMin: { type: integer }, teamMax: { type: integer }, votingEnabled: { type: boolean } } }
+      responses:
+        '200': { description: Updated event }
+        '403': { $ref: '#/components/responses/Error' }
+  /events/{slug}/teams:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    post:
+      tags: [Teams and submissions]
+      summary: Create a participant team
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string } } }
+      responses:
+        '201': { description: Team and invite token }
+        '401': { $ref: '#/components/responses/Error' }
+    put:
+      tags: [Teams and submissions]
+      summary: Join a team by invite token
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [inviteToken], properties: { inviteToken: { type: string } } }
+      responses:
+        '200': { description: Membership created }
+        '409': { $ref: '#/components/responses/Error' }
+  /events/{slug}/submissions:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    get:
+      tags: [Teams and submissions]
+      summary: List public submissions or role-scoped submissions
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Participant gets own; judge gets assigned; event manager gets event submissions }
+        '401': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Teams and submissions]
+      summary: Save a draft or submit a project
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [teamId, trackId, title, tagline, description], properties: { teamId: { type: string }, trackId: { type: string }, title: { type: string }, tagline: { type: string }, description: { type: string }, repoUrl: { type: string }, demoUrl: { type: string }, submit: { type: boolean } } }
+      responses:
+        '201': { description: Submission saved }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { description: Deadline passed or submission locked }
+  /events/{slug}/gallery:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    get:
+      tags: [Public participation]
+      summary: Search and filter public submitted projects
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: track, in: query, schema: { type: string } }
+        - { name: seed, in: query, schema: { type: string } }
+      responses:
+        '200': { description: Stable-seed ordered public project summaries; no private scores }
+  /events/{slug}/votes:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    post:
+      tags: [Public participation]
+      summary: Cast one community vote (participant)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [submissionId], properties: { submissionId: { type: string } } }
+      responses:
+        '201': { description: Vote recorded }
+        '409': { description: Duplicate vote or voting closed }
+        '429': { description: Rate limited }
+  /events/{slug}/comments:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    get:
+      tags: [Public participation]
+      summary: List comments for a submission
+      parameters: [{ name: submissionId, in: query, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Public comments }
+    post:
+      tags: [Public participation]
+      summary: Add a comment (participant)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [submissionId, body], properties: { submissionId: { type: string }, body: { type: string, maxLength: 1000 } } }
+      responses:
+        '201': { description: Comment created }
+        '429': { description: Rate limited }
+  /events/{slug}/assignments:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    get:
+      tags: [Judging]
+      summary: List the caller's assignments or event assignments (manager)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Assignments with score state }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Judging]
+      summary: Batch assign judges manually or by least-loaded heuristic
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [mode, judgeIds, submissionIds], properties: { mode: { type: string, enum: [manual, auto] }, judgeIds: { type: array, items: { type: string } }, submissionIds: { type: array, items: { type: string } }, perSubmission: { type: integer, default: 2 } } }
+      responses:
+        '201': { description: Assignment rows }
+        '403': { $ref: '#/components/responses/Error' }
+  /scores:
+    post:
+      tags: [Judging]
+      summary: Submit or update an assigned score (judge only)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [assignmentId, values], properties: { assignmentId: { type: string }, values: { type: object, additionalProperties: { type: number } }, feedback: { type: string } } }
+      responses:
+        '200': { description: Saved score }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { description: Judging closed }
+  /events/{slug}/criteria:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    put:
+      tags: [Judging]
+      summary: Replace event rubric (owner/admin, weights total 100)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [criteria], properties: { criteria: { type: array, items: { type: object, required: [name, weight, maxScore], properties: { name: { type: string }, description: { type: string }, weight: { type: number }, maxScore: { type: integer } } } } } }
+      responses:
+        '200': { description: New rubric }
+        '400': { $ref: '#/components/responses/Error' }
+  /events/{slug}/progress:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    get:
+      tags: [Judging]
+      summary: Per-judge and overall completion (owner/admin)
+      security: [{ cookieAuth: [] }]
+      responses: { '200': { description: Completion counts and percentages } }
+  /events/{slug}/results:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    get:
+      tags: [Judging]
+      summary: View results; normalized scores selected with x-score-view header
+      parameters: [{ name: x-score-view, in: header, schema: { type: string, enum: [raw, normalized], default: raw } }]
+      responses:
+        '200': { description: Published results or manager view }
+        '403': { description: Results hidden }
+    post:
+      tags: [Judging]
+      summary: Publish results after judging and voting end (owner/admin)
+      security: [{ cookieAuth: [] }]
+      responses: { '200': { description: Results published }, '409': { description: Judging or voting still active } }
+  /events/{slug}/judge-invites:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    post:
+      tags: [Judging]
+      summary: Create or refresh an email-bound judge invite (owner/admin)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [email], properties: { email: { type: string, format: email } } }
+      responses: { '201': { description: Invite token and local invite URL } }
+  /judge-invites/{token}:
+    parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [Judging]
+      summary: Redeem invitation while authenticated as its email address
+      security: [{ cookieAuth: [] }]
+      responses: { '200': { description: Judge role activated }, '410': { description: Expired or used invite } }
+  /judges:
+    get:
+      tags: [Judging]
+      summary: List judge users (organizer/admin)
+      security: [{ cookieAuth: [] }]
+      responses: { '200': { description: Judge identity list } }
+  /events/{slug}/audit:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    get:
+      tags: [Operations]
+      summary: Read event audit history (admin only)
+      security: [{ cookieAuth: [] }]
+      responses: { '200': { description: Ordered audit records }, '403': { $ref: '#/components/responses/Error' } }
+  /events/{slug}/export:
+    parameters: [{ $ref: '#/components/parameters/Slug' }, { name: type, in: query, schema: { type: string, enum: [submissions, assignments, raw-scores, normalized-scores, results] } }]
+    get:
+      tags: [Operations]
+      summary: Download an event-scoped CSV (owner/admin)
+      security: [{ cookieAuth: [] }]
+      responses: { '200': { description: CSV attachment }, '400': { $ref: '#/components/responses/Error' } }
+  /events/{slug}/bulk:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    get:
+      tags: [Operations]
+      summary: Export JSON snapshot or selected CSV round-trip dataset (owner/admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+        - { name: type, in: query, schema: { type: string, enum: [teams, submissions, scores] } }
+      responses: { '200': { description: JSON snapshot or CSV attachment for teams, submissions, or scores } }
+    post:
+      tags: [Operations]
+      summary: Import version 1 teams and submissions (owner/admin)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [version], properties: { version: { type: integer, enum: [1] }, teams: { type: array, items: { type: object } }, submissions: { type: array, items: { type: object } }, scores: { type: array, items: { type: object } } } }
+          text/csv:
+            schema: { type: string, description: CSV import; type query parameter selects teams, submissions, or score rows }
+      responses: { '201': { description: Import counts }, '400': { $ref: '#/components/responses/Error' } }
+  /events/{slug}/certificate:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    get:
+      tags: [Operations]
+      summary: Download participant team certificate PDF after publication
+      security: [{ cookieAuth: [] }]
+      responses: { '200': { description: PDF attachment }, '409': { description: Results not published } }
+  /events/{slug}/records:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    get:
+      tags: [Operations]
+      summary: Public signed judge participation records
+      responses: { '200': { description: Payload, SHA-256 hash, HMAC, and issue time } }
+    post:
+      tags: [Operations]
+      summary: Issue/update participation records (owner/admin)
+      security: [{ cookieAuth: [] }]
+      responses: { '201': { description: Issued records } }
+  /events/{slug}/webhooks:
+    parameters: [{ $ref: '#/components/parameters/Slug' }]
+    get:
+      tags: [Operations]
+      summary: List webhook configuration and deliveries (owner/admin)
+      security: [{ cookieAuth: [] }]
+      responses: { '200': { description: Webhooks and recent attempts } }
+    post:
+      tags: [Operations]
+      summary: Add signed webhook destination (owner/admin)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [url], properties: { url: { type: string, format: uri }, enabled: { type: boolean } } }
+      responses: { '201': { description: Webhook config and secret } }
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: dogfood_session
+  parameters:
+    Slug:
+      name: slug
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    EventCreate:
+      type: object
+      required: [slug, name, description, startsAt, submissionEnds, judgingEnds, votingEnds, tracks, criteria]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string }
+        startsAt: { type: string, format: date-time }
+        submissionEnds: { type: string, format: date-time }
+        judgingEnds: { type: string, format: date-time }
+        votingEnds: { type: string, format: date-time }
+        teamMin: { type: integer, default: 1 }
+        teamMax: { type: integer, default: 4 }
+        votingEnabled: { type: boolean, default: true }
+        tracks: { type: array, items: { type: object, required: [name], properties: { name: { type: string }, description: { type: string } } } }
+        prizes: { type: array, items: { type: object, required: [title], properties: { title: { type: string }, description: { type: string }, value: { type: string } } } }
+        criteria: { type: array, items: { type: object, required: [name, weight, maxScore], properties: { name: { type: string }, description: { type: string }, weight: { type: number }, maxScore: { type: integer } } } }
+  responses:
+    Error:
+      description: JSON error object
+      content:
+        application/json:
+          schema: { type: object, properties: { error: { type: string } } }

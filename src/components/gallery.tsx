@@ -1,0 +1,26 @@
+'use client';
+import { FormEvent, useEffect, useState } from 'react';
+import Link from 'next/link';
+
+type Project = { id: string; title: string; tagline: string; description: string; repoUrl: string; demoUrl: string; track: { id: string; name: string }; team: { name: string }; _count: { votes: number; comments: number } };
+type GalleryData = { event: { name: string; votingEnabled: boolean; votingEnds: string; resultsPublished: boolean }; tracks: { id: string; name: string }[]; submissions: Project[] };
+
+export function Gallery({ slug, embedded = false }: { slug: string; embedded?: boolean }) {
+    const [data, setData] = useState<GalleryData | null>(null); const [query, setQuery] = useState(''); const [track, setTrack] = useState(''); const [seed, setSeed] = useState(''); const [message, setMessage] = useState(''); const [commentsFor, setCommentsFor] = useState<string | null>(null); const [comments, setComments] = useState<{ id: string; body: string; user: { name: string } }[]>([]);
+    useEffect(() => { let viewerSeed = localStorage.getItem('dogfood-view-seed'); if (!viewerSeed) { viewerSeed = crypto.randomUUID(); localStorage.setItem('dogfood-view-seed', viewerSeed); } setSeed(viewerSeed); }, []);
+    useEffect(() => { if (!seed) return; const params = new URLSearchParams({ seed }); if (query) params.set('q', query); if (track) params.set('track', track); fetch(`/api/events/${slug}/gallery?${params}`).then((response) => response.json()).then(setData).catch(() => setMessage('Could not load this gallery.')); }, [slug, query, track, seed]);
+    async function vote(submissionId: string) {
+        const response = await fetch(`/api/events/${slug}/votes`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ submissionId }) });
+        const result = await response.json(); setMessage(response.ok ? 'Vote recorded.' : result.error ?? 'Sign in to vote.');
+        if (response.ok) setData((current) => current && ({ ...current, submissions: current.submissions.map((project) => project.id === submissionId ? { ...project, _count: { ...project._count, votes: project._count.votes + 1 } } : project) }));
+    }
+    async function openComments(submissionId: string) {
+        setCommentsFor(submissionId); const response = await fetch(`/api/events/${slug}/comments?submissionId=${submissionId}`); setComments(await response.json());
+    }
+    async function postComment(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault(); const form = new FormData(event.currentTarget); const response = await fetch(`/api/events/${slug}/comments`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ submissionId: commentsFor, body: form.get('body') }) }); const result = await response.json();
+        if (!response.ok) { setMessage(result.error ?? 'Sign in to comment.'); return; }
+        event.currentTarget.reset(); await openComments(commentsFor!);
+    }
+    return <main className={embedded ? '' : 'wrap'}>{!embedded && <div className="page-title"><Link href="/" className="eyebrow">← All events</Link><h1>{data?.event.name ?? 'Project gallery'}</h1><p className="muted">Projects built by participating teams.</p>{data?.event.resultsPublished && <Link className="button secondary" href={`/events/${slug}/results`}>View published results →</Link>}</div>}<div className="toolbar"><input className="field" aria-label="Search projects" placeholder="Search projects or teams" value={query} onChange={(event) => setQuery(event.target.value)} /><select className="field" aria-label="Filter by track" value={track} onChange={(event) => setTrack(event.target.value)}><option value="">All tracks</option>{data?.tracks.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><span className="muted">{data?.submissions.length ?? 0} projects</span></div>{message && <div role="status" className="status" style={{ marginBottom: 14 }}>{message}</div>}<div className="project-grid">{data?.submissions.map((project) => <article className="project" key={project.id}><div className="eyebrow">{project.team.name} · {project.track.name}</div><h2>{project.title}</h2><strong style={{ marginBottom: 8 }}>{project.tagline}</strong><p>{project.description}</p><div className="project-actions"><button className="button lime" disabled={embedded || !data.event.votingEnabled} onClick={() => vote(project.id)}>↑ Vote · {project._count.votes}</button><button className="button secondary" onClick={() => openComments(project.id)}>Comments · {project._count.comments}</button>{project.demoUrl && <a className="muted" href={project.demoUrl} target="_blank" rel="noreferrer">Demo ↗</a>}</div>{commentsFor === project.id && <section className="form-panel"><h3>Community notes</h3>{comments.map((comment) => <p key={comment.id}><strong>{comment.user.name}:</strong> {comment.body}</p>)}{!embedded && <form onSubmit={postComment} className="form-stack"><textarea className="field" name="body" required maxLength={1000} placeholder="Leave a constructive note" /><button className="button secondary">Post comment</button></form>}</section>}</article>)}</div>{data && data.submissions.length === 0 && <p className="muted" style={{ padding: 24 }}>No projects match these filters.</p>}</main>;
+}

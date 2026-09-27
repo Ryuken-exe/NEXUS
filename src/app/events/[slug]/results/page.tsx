@@ -1,0 +1,10 @@
+'use client';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { SiteHeader } from '@/components/site-header';
+type Result = { id: string; title: string; team: string; track: string; score: number | null; votes: number };
+export default function ResultsPage({ params }: { params: { slug: string } }) {
+    const [view, setView] = useState<'raw' | 'normalized'>('raw'); const [rows, setRows] = useState<Result[]>([]); const [error, setError] = useState('');
+    useEffect(() => { fetch(`/api/events/${params.slug}/results`, { headers: { 'x-score-view': view } }).then(async (response) => { const result = await response.json(); if (!response.ok) throw new Error(result.error); setRows(result); setError(''); }).catch((reason) => setError(reason.message)); }, [params.slug, view]);
+    return <><SiteHeader /><main className="wrap"><div className="page-title"><Link href={`/events/${params.slug}`} className="eyebrow">← Project gallery</Link><h1>Results</h1><p className="muted">Cross-judge scores are aggregated per project. Individual judge ballots stay private.</p></div><div className="toolbar" role="group" aria-label="Score scale"><button className={`button ${view === 'raw' ? '' : 'secondary'}`} onClick={() => setView('raw')}>Raw average</button><button className={`button ${view === 'normalized' ? '' : 'secondary'}`} onClick={() => setView('normalized')}>Normalized z</button></div>{error ? <p role="status" className="status">{error}</p> : <table className="table"><thead><tr><th>Rank</th><th>Project</th><th>Team</th><th>Track</th><th>{view === 'raw' ? 'Raw average' : 'Normalized z'}</th><th>Votes</th></tr></thead><tbody>{rows.map((row, index) => <tr key={row.id}><td>{index + 1}</td><td>{row.title}</td><td>{row.team}</td><td>{row.track}</td><td>{row.score === null ? '—' : row.score.toFixed(3)}</td><td>{row.votes}</td></tr>)}</tbody></table>}</main></>;
+}

@@ -1,0 +1,8 @@
+'use client';
+import { FormEvent, useState } from 'react';
+import { SiteHeader } from '@/components/site-header';
+export default function JudgeManagementPage({ params }: { params: { slug: string } }) {
+    const [message, setMessage] = useState(''); const [inviteUrl, setInviteUrl] = useState('');
+    async function invite(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const email = new FormData(event.currentTarget).get('email'); const response = await fetch(`/api/events/${params.slug}/judge-invites`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) }); const result = await response.json(); setMessage(response.ok ? 'Invitation created. Share this link with the invited account.' : result.error); if (response.ok) setInviteUrl(result.inviteUrl); }
+    return <><SiteHeader /><main className="wrap" style={{ maxWidth: 760 }}><div className="page-title"><div className="eyebrow">Organizer · Judge roster</div><h1>Invite your panel.</h1><p className="muted">Invites expire after seven days and can only be redeemed by a signed-in account with the matching email.</p></div><form className="form-panel form-stack" onSubmit={invite}><label>Judge email<input className="field" name="email" type="email" required /></label><button className="button">Create invitation link</button>{message && <p role="status" className="status">{message}</p>}{inviteUrl && <a className="button secondary" href={inviteUrl}>{inviteUrl}</a>}</form></main></>;
+}

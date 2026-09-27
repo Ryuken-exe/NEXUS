@@ -1,0 +1,17 @@
+# Threat model
+
+Assume an internet-facing deployment with untrusted participants, judges, and anonymous visitors. The compose configuration is a local demo, not a production secret-management recipe.
+
+| Threat | Mitigation in code | Residual risk |
+|---|---|---|
+| Sybil voting | Registration is participant-only; voting requires an authenticated account; unique `(event, user)` vote key; one vote per HMACed IP per event. See `api/auth/register`, `api/events/[slug]/votes`, and `Vote` constraints in `prisma/schema.prisma`. | No email verification, CAPTCHA, or identity proof. A determined attacker can create accounts and rotate networks; shared NAT users can be blocked together. |
+| Ballot stuffing | Database uniqueness rejects concurrent duplicates; server checks voting toggle/deadline; account and IP recent-vote count caps apply; vote and audit creation share a transaction. See `api/events/[slug]/votes`. | Count-based limit is not an atomic distributed rate limiter, and proxy correctness depends on trusted `x-forwarded-for` configuration. |
+| Submission scraping | Private draft reads require team membership; judge reads are limited to assigned projects; gallery explicitly publishes only submitted public fields; private score data is never included in gallery payloads; gallery reads are limited to 30 requests per minute per hashed IP. See `api/events/[slug]/submissions`, `gallery`, and `lib/rate-limit.ts`. | Published project content is intentionally public and can be copied. The gallery limiter is in-process (not shared across replicas) and relies on forwarding headers being overwritten by a trusted proxy. |
+| Judge collusion | Each score is tied to an assigned judge; judges only see assigned submissions and their own assignment score; assignments/scores/votes are audit logged; raw scoring exports require event owner/admin. | No conflict-of-interest declaration, blind judging option, collusion detection, or immutable database trigger. Admin/operator and database owners remain trusted. |
+| Deadline gaming | API compares server time to event timestamps for submit, team join, voting, and scoring; submitted work is locked from edits. See submissions, teams, votes, and scores handlers. | Hosts must maintain correct system time. Organizer/admin can configure dates; all changes are not separately audit logged in this version. |
+| Role escalation | Registration fixes role to participant; judge role changes only after a valid, expiring, email-bound invitation; protected routes re-read user role server-side. | Admin/organizer account compromise is high impact. No MFA or account recovery flow is included. |
+| Webhook SSRF | Only event managers can configure endpoints; delivery timeout is bounded and payload is signed. | Destination filtering does not block private/metadata IP ranges. Treat endpoint configuration as trusted-admin-only and do not expose to untrusted organizers on shared hosting. |
+
+## Operational controls
+
+Use HTTPS and distinct high-entropy `JWT_SECRET` and `JUDGE_SIGNING_SECRET`; rotate them deliberately. Do not expose demo accounts or secrets. Terminate traffic at a proxy that overwrites forwarding headers. Restrict network egress if webhook delivery is unused. Back up PostgreSQL and treat its operator as trusted. HMAC judge records require distributing the shared verification key securely; anyone with that key can forge records, so these records are integrity checks, not third-party non-repudiation.
