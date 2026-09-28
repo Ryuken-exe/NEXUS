@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
 import { z } from 'zod';
+import { signSession } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { errorResponse, HttpError, jsonBody } from '@/lib/http';
 
@@ -12,6 +13,8 @@ export async function POST(request: Request) {
         if (!input.success) throw new HttpError(400, input.error.issues[0]?.message ?? 'Invalid registration');
         const { password, email, name } = input.data;
         const user = await db.user.create({ data: { email: email.toLowerCase(), name, passwordHash: await hash(password, 12) }, select: { id: true, email: true, name: true, role: true } });
-        return NextResponse.json(user, { status: 201 });
+        const response = NextResponse.json(user, { status: 201 });
+        response.cookies.set('dogfood_session', signSession(user), { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' && process.env.APP_URL?.startsWith('https://') === true, path: '/', maxAge: 60 * 60 * 24 * 7 });
+        return response;
     } catch (error) { return errorResponse(error); }
 }

@@ -5,6 +5,28 @@ import { requireUser, requireTeamMember } from '@/lib/auth';
 import { isBeforeDeadline } from '@/lib/judging';
 import { errorResponse, HttpError, jsonBody } from '@/lib/http';
 
+export async function GET(_request: Request, context: { params: { slug: string } }) {
+    try {
+        const user = await requireUser(['PARTICIPANT']);
+        const event = await db.event.findUnique({ where: { slug: context.params.slug }, select: { id: true, teamMin: true, teamMax: true, submissionEnds: true } });
+        if (!event) throw new HttpError(404, 'Event not found');
+        const membership = await db.teamMember.findFirst({
+            where: { userId: user.id, team: { eventId: event.id } },
+            include: {
+                team: {
+                    include: {
+                        members: {
+                            include: { user: { select: { id: true, name: true } } },
+                            orderBy: { joinedAt: 'asc' }
+                        }
+                    }
+                }
+            }
+        });
+        return NextResponse.json({ team: membership?.team ?? null, event: { teamMin: event.teamMin, teamMax: event.teamMax, submissionEnds: event.submissionEnds } });
+    } catch (error) { return errorResponse(error); }
+}
+
 export async function POST(request: Request, context: { params: { slug: string } }) {
     try {
         const user = await requireUser(['PARTICIPANT']);

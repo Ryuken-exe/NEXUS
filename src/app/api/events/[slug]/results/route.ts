@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { requireEventManager, requireUser } from '@/lib/auth';
 import { currentSession } from '@/lib/auth';
 import { normalizeJudgeScores, rankResults } from '@/lib/judging';
+import { isBeforeDeadline } from '@/lib/judging';
 import { errorResponse, HttpError } from '@/lib/http';
 import { dispatchWebhook } from '@/lib/webhooks';
 
@@ -55,7 +56,7 @@ export async function POST(_request: Request, context: { params: { slug: string 
         if (!event) throw new HttpError(404, 'Event not found');
         await requireEventManager(event.id, manager.id, manager.role);
         const now = new Date();
-        if (now < event.judgingEnds || now < event.votingEnds) throw new HttpError(409, 'Judging and voting periods must both close before publication');
+        if (isBeforeDeadline(now, event.judgingEnds) || isBeforeDeadline(now, event.votingEnds)) throw new HttpError(409, 'Judging and voting periods must both close before publication');
         await db.event.update({ where: { id: event.id }, data: { resultsPublished: true } });
         await db.auditLog.create({ data: { eventId: event.id, actorId: manager.id, action: 'results.published', targetId: event.id, details: {} } });
         await dispatchWebhook(event.id, 'results.published', { eventId: event.id, slug: event.slug });

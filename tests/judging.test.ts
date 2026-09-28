@@ -73,6 +73,7 @@ describe('judging primitives', () => {
         expect(result[0].zScore).toBeCloseTo(-Math.SQRT1_2);
         expect(result[1].zScore).toBeCloseTo(Math.SQRT1_2);
         expect(result[2].zScore).toBe(0);
+        expect(normalizeJudgeScores([{ judgeId: 'same', submissionId: 'p1', total: 12 }, { judgeId: 'same', submissionId: 'p2', total: 12 }]).map((row) => row.zScore)).toEqual([0, 0]);
     });
 
     it('quotes CSV and neutralizes spreadsheet formulas in string fields', () => {

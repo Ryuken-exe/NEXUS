@@ -27,3 +27,34 @@ Next.js lets the user-facing pages and REST API share a deployment and cookie bo
 ## Runtime and trust boundaries
 
 The normal runtime is browser → Next.js → PostgreSQL. No external API is needed for core operation. A configured webhook is the sole feature that intentionally makes outbound requests; operators must trust destinations they configure. The included compose secrets are demo-only. See `THREAT-MODEL.md` for abuse cases and residual risks.
+
+## Route guard audit (T1/T2)
+
+The core request boundary is centralized in `src/lib/auth.ts`. Route handlers should be thin and rely on `requireUser()`, `requireRole()`, and `requireEventManager()` instead of ad hoc checks.
+
+| Route | Allowed roles | Guard present | Notes |
+| --- | --- | --- | --- |
+| `/api/auth/login` | public | Yes | login only; session issued after credential check |
+| `/api/auth/register` | public | Yes | participant-only account creation |
+| `/api/auth/me` | authenticated | Yes | loads current session user |
+| `/api/events` | ORGANIZER, ADMIN | Yes | event creation requires manager role |
+| `/api/events/[slug]` | ORGANIZER, ADMIN | Yes | owner/admin event manager gate |
+| `/api/events/[slug]/teams` | PARTICIPANT | Yes | team membership and event scoping enforced |
+| `/api/events/[slug]/submissions` | PARTICIPANT, JUDGE, ORGANIZER, ADMIN | Yes | participant team check; organizer sees event-level submissions |
+| `/api/events/[slug]/assignments` | JUDGE, ORGANIZER, ADMIN | Yes | judge-scoped reads; manager-only mutation |
+| `/api/events/[slug]/calibration` | JUDGE, ORGANIZER, ADMIN | Yes | manager check only when present |
+| `/api/events/[slug]/conflicts` | JUDGE, ORGANIZER, ADMIN | Yes | manager gate for admin writes; judge can read own conflict scope |
+| `/api/events/[slug]/criteria` | ORGANIZER, ADMIN | Yes | event manager ownership required |
+| `/api/events/[slug]/judge-invites` | ORGANIZER, ADMIN | Yes | event owner/admin gate |
+| `/api/events/[slug]/results` | public with hidden-results policy | Yes | public access blocked before publication; manager overrides |
+| `/api/events/[slug]/records` | ORGANIZER, ADMIN | Yes | event manager guard |
+| `/api/events/[slug]/progress` | ORGANIZER, ADMIN | Yes | event manager guard |
+| `/api/events/[slug]/export` | ORGANIZER, ADMIN | Yes | event manager guard |
+| `/api/events/[slug]/audit` | ADMIN | Yes | admin-only access |
+| `/api/events/[slug]/score-history` | ADMIN | Yes | admin-only access |
+| `/api/events/[slug]/webhooks` | ORGANIZER, ADMIN | Yes | event manager guard |
+| `/api/judges` | ORGANIZER, ADMIN | Yes | manager-only judge registry access |
+| `/api/scores` | JUDGE | Yes | judge identity validated before score write |
+| `/api/judge-invites/[token]` | PARTICIPANT, JUDGE | Yes | token-based account role acceptance |
+
+This audit was intentionally scoped to the T1/T2 routes under active refactor. T3/T4 behavior was left untouched, in line with the requirement to avoid unrelated feature work.

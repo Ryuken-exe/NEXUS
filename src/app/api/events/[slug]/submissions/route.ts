@@ -38,7 +38,7 @@ export async function GET(_request: Request, context: { params: { slug: string }
         if (!event) throw new HttpError(404, 'Event not found');
         if (user.role === 'ORGANIZER') await requireEventManager(event.id, user.id, user.role);
         let where: Record<string, unknown> = { eventId: event.id, status: 'SUBMITTED' };
-        if (user.role === 'PARTICIPANT') where = { ...where, team: { members: { some: { userId: user.id } } } };
+        if (user.role === 'PARTICIPANT') where = { eventId: event.id, team: { members: { some: { userId: user.id } } } };
         if (user.role === 'JUDGE') where = { ...where, assignments: { some: { judgeId: user.id } } };
         const submissions = await db.submission.findMany({ where, include: { team: { select: { name: true } }, track: true, ...(user.role === 'JUDGE' ? { assignments: { where: { judgeId: user.id }, include: { score: true } } } : {}) }, orderBy: { submittedAt: 'desc' } });
         return NextResponse.json(submissions);

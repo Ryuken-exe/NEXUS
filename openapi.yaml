@@ -91,6 +91,13 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
   /events/{slug}/teams:
     parameters: [{ $ref: '#/components/parameters/Slug' }]
+    get:
+      tags: [Teams and submissions]
+      summary: Get the participant's team, members, and event size limits
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Participant-owned team summary or null when not on a team }
+        '401': { $ref: '#/components/responses/Error' }
     post:
       tags: [Teams and submissions]
       summary: Create a participant team
@@ -117,10 +124,10 @@ paths:
     parameters: [{ $ref: '#/components/parameters/Slug' }]
     get:
       tags: [Teams and submissions]
-      summary: List public submissions or role-scoped submissions
+      summary: List role-scoped submissions; participants can retrieve their own drafts
       security: [{ cookieAuth: [] }]
       responses:
-        '200': { description: Participant gets own; judge gets assigned; event manager gets event submissions }
+        '200': { description: Participant gets own team submissions; judge gets assigned submitted projects; manager gets submitted projects }
         '401': { $ref: '#/components/responses/Error' }
     post:
       tags: [Teams and submissions]
@@ -186,7 +193,7 @@ paths:
       summary: List the caller's assignments or event assignments (manager)
       security: [{ cookieAuth: [] }]
       responses:
-        '200': { description: Assignments with score state }
+        '200': { description: Judge assignment rows include project title, tagline, description, repository/demo URLs, track, team, and score state }
         '403': { $ref: '#/components/responses/Error' }
     post:
       tags: [Judging]

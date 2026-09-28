@@ -11,7 +11,7 @@ export async function GET(_request: Request, context: { params: { slug: string }
         const event = await db.event.findUnique({ where: { slug: context.params.slug } });
         if (!event) throw new HttpError(404, 'Event not found');
         if (user.role !== 'JUDGE') await requireEventManager(event.id, user.id, user.role);
-        const assignments = await db.judgeAssignment.findMany({ where: user.role === 'JUDGE' ? { eventId: event.id, judgeId: user.id } : { eventId: event.id }, include: { judge: { select: { id: true, name: true, email: true } }, submission: { select: { id: true, title: true, team: { select: { name: true } } } }, score: true }, orderBy: [{ judge: { name: 'asc' } }, { assignedAt: 'asc' }] });
+        const assignments = await db.judgeAssignment.findMany({ where: user.role === 'JUDGE' ? { eventId: event.id, judgeId: user.id } : { eventId: event.id }, include: { judge: { select: { id: true, name: true, email: true } }, submission: { select: { id: true, title: true, tagline: true, description: true, repoUrl: true, demoUrl: true, submittedAt: true, team: { select: { name: true } }, track: { select: { name: true } } } }, score: true }, orderBy: [{ judge: { name: 'asc' } }, { assignedAt: 'asc' }] });
         return NextResponse.json(assignments);
     } catch (error) { return errorResponse(error); }
 }

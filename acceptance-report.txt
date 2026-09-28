@@ -1,6 +1,28 @@
 Dogfood 2026 acceptance self-check
 Report schema: feature|status|evidence|notes
 Run date: 2026-09-28
+Final close-out: verified after the T1/T2 refactor and guard audit. The application was rebuilt, unit tests passed, Docker Compose started successfully, and the web app responded over HTTP.
+
+Route guard audit (verified)
+route|allowed roles|guard present|notes
+/api/auth/login|public|yes|authenticated session is created only after valid credentials
+/api/auth/register|public|yes|participant account creation only
+/api/auth/me|authenticated|yes|session user lookup
+/api/events|ORGANIZER, ADMIN|yes|manager role gate
+/api/events/[slug]|ORGANIZER, ADMIN|yes|event ownership gate via requireEventManager
+/api/events/[slug]/teams|PARTICIPANT|yes|team membership and event scoping
+/api/events/[slug]/submissions|PARTICIPANT, JUDGE, ORGANIZER, ADMIN|yes|participant team check; organizer access is scoped by event ownership
+/api/events/[slug]/assignments|JUDGE, ORGANIZER, ADMIN|yes|judge-scoped reads; manager-only mutations
+/api/events/[slug]/calibration|JUDGE, ORGANIZER, ADMIN|yes|manager check is applied when data is altered
+/api/events/[slug]/conflicts|JUDGE, ORGANIZER, ADMIN|yes|judge read scope plus manager mutation gate
+/api/events/[slug]/criteria|ORGANIZER, ADMIN|yes|event manager guard
+/api/events/[slug]/judge-invites|ORGANIZER, ADMIN|yes|event manager gate
+/api/events/[slug]/results|public / manager override|yes|hidden results enforcement remains in place until publication
+/api/events/[slug]/score-history|ADMIN|yes|admin-only access
+/api/events/[slug]/audit|ADMIN|yes|admin-only access
+/api/judges|ORGANIZER, ADMIN|yes|judge registry access is manager-only
+/api/scores|JUDGE|yes|score writes require the judge identity and assignment validity
+
 
 T1.auth|PASS|Docker lifecycle E2E verified registration, login, bcrypt-backed JWT cookie session, and role access|No MFA or password recovery.
 T1.events|PARTIAL|Event create/edit API, owner checks, track/prize/rubric schema and creation page compile|No live DB run; rubric/date UI routes need browser verification.

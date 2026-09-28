@@ -30,13 +30,17 @@ export async function requireUser(roles?: Session['role'][]) {
     return user;
 }
 
+export function requireRole(...roles: Session['role'][]) {
+    return requireUser(roles);
+}
+
 export async function requireTeamMember(teamId: string, userId: string) {
     const membership = await db.teamMember.findFirst({ where: { teamId, userId }, include: { team: true } });
     if (!membership) throw new HttpError(403, 'You are not a member of this team');
     return membership;
 }
 
-export async function requireEventManager(eventId: string, userId: string, role: string) {
+export async function requireEventManager(eventId: string, userId: string, role: Session['role']) {
     if (role === 'ADMIN') return;
     const event = await db.event.findUnique({ where: { id: eventId }, select: { createdById: true } });
     if (!event || event.createdById !== userId) throw new HttpError(403, 'Event organizer access required');
