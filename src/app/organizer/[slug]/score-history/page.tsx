@@ -1,0 +1,20 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { SiteHeader } from '@/components/site-header';
+
+type Assignment = { judge: { id: string; name: string }; submission: { id: string; title: string; team: { name: string } } };
+type Edit = { id: string; createdAt: string; actor: { name: string } | null; submission: { title: string; team: { name: string } } | null; details: { oldValue: { total: number; values: Record<string, number>; feedback: string }; newValue: { total: number; values: Record<string, number>; feedback: string }; changedCriteria: { name: string; oldValue: number | null; newValue: number | null }[]; changeReason: string } };
+
+export default function ScoreHistoryPage({ params }: { params: { slug: string } }) {
+    const [assignments, setAssignments] = useState<Assignment[]>([]); const [edits, setEdits] = useState<Edit[]>([]); const [judgeId, setJudgeId] = useState(''); const [submissionId, setSubmissionId] = useState(''); const [message, setMessage] = useState('');
+    async function load() {
+        const query = new URLSearchParams(); if (judgeId) query.set('judgeId', judgeId); if (submissionId) query.set('submissionId', submissionId);
+        const response = await fetch(`/api/events/${params.slug}/score-history?${query}`); const data = await response.json();
+        if (response.ok) { setEdits(data); setMessage(''); } else setMessage(data.error);
+    }
+    useEffect(() => { fetch(`/api/events/${params.slug}/assignments`).then(async (response) => { const data = await response.json(); if (response.ok && Array.isArray(data)) setAssignments(data); else setMessage(data.error ?? 'Could not load event assignments.'); }); }, [params.slug]);
+    useEffect(() => { void load(); }, [params.slug, judgeId, submissionId]);
+    const judges = [...new Map(assignments.map((assignment) => [assignment.judge.id, assignment.judge])).values()];
+    const submissions = [...new Map(assignments.map((assignment) => [assignment.submission.id, assignment.submission])).values()];
+    return <><SiteHeader /><main className="wrap"><div className="page-title"><div className="eyebrow">Admin · Judging integrity</div><h1>Score edit history</h1><p className="muted">Append-only snapshots from the event audit trail.</p></div><div className="toolbar"><select className="field" aria-label="Filter by judge" value={judgeId} onChange={(event) => setJudgeId(event.target.value)}><option value="">All judges</option>{judges.map((judge) => <option key={judge.id} value={judge.id}>{judge.name}</option>)}</select><select className="field" aria-label="Filter by project" value={submissionId} onChange={(event) => setSubmissionId(event.target.value)}><option value="">All projects</option>{submissions.map((submission) => <option key={submission.id} value={submission.id}>{submission.team.name} · {submission.title}</option>)}</select></div>{message && <p role="status" className="status">{message}</p>}{edits.map((edit) => <article className="project" key={edit.id}><h2>{edit.submission ? `${edit.submission.team.name} · ${edit.submission.title} · ` : ''}{edit.actor?.name ?? 'Deleted user'} · {new Date(edit.createdAt).toLocaleString()}</h2><p>Total: {edit.details.oldValue.total} → {edit.details.newValue.total}</p><p>Criteria: {edit.details.changedCriteria.map((criterion) => `${criterion.name} ${criterion.oldValue ?? '—'} → ${criterion.newValue ?? '—'}`).join(', ') || 'None'}</p><p>Feedback: {edit.details.oldValue.feedback || '—'} → {edit.details.newValue.feedback || '—'}</p>{edit.details.changeReason && <p>Reason: {edit.details.changeReason}</p>}<details><summary>Full criterion values</summary><p>Old: {JSON.stringify(edit.details.oldValue.values)}</p><p>New: {JSON.stringify(edit.details.newValue.values)}</p></details></article>)}{!message && edits.length === 0 && <p className="muted">No score edits match these filters.</p>}</main></>;
+}

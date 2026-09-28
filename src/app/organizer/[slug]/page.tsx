@@ -22,7 +22,7 @@ export default function OrganizerPage({ params }: { params: { slug: string } }) 
     }, [params.slug]);
     async function assign(mode: 'manual' | 'auto') {
         const response = await fetch(`/api/events/${params.slug}/assignments`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode, judgeIds: judges.map((judge) => judge.id), submissionIds: submissions.map((submission) => submission.id), perSubmission: 2 }) });
-        const result = await response.json(); setMessage(response.ok ? `${result.count} assignment records saved.` : result.error);
+        const result = await response.json(); setMessage(response.ok ? `${result.count} assignment records saved; ${result.blocked ?? 0} blocked by conflicts.${result.warnings?.length ? ` ${result.warnings.map((warning: { message: string }) => warning.message).join(' ')}` : ''}` : result.error);
     }
     async function publish() {
         const response = await fetch(`/api/events/${params.slug}/results`, { method: 'POST' }); const result = await response.json();

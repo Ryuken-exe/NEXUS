@@ -25,9 +25,12 @@ erDiagram
   WEBHOOK ||--o{ WEBHOOK_DELIVERY : attempts
   EVENT ||--o{ JUDGE_RECORD : certifies
   EVENT ||--o{ JUDGE_INVITE : invites
+  EVENT ||--o{ CONFLICT_OF_INTEREST : scopes
+  USER ||--o{ CONFLICT_OF_INTEREST : judges_or_declares
+  TEAM ||--o{ CONFLICT_OF_INTEREST : conflicts_with
 ```
 
-`User.role` is a server-checked enum. `TeamMember` is the many-to-many membership join. Each team can own at most one submission. Submissions belong to one event and track and are either draft or submitted. `RubricCriterion.weight` values are validated as a 100% total by organizer endpoints. `Score.values` stores criterion-to-number JSON while `Score.total` stores its weighted result. `JudgeAssignment` is unique per submission/judge. Vote uniqueness is `(eventId,userId)` and `(eventId,ipHash)`; IP values are HMACed before storage. `AuditLog` is append-only by application convention and has no update/delete API.
+`User.role` is a server-checked enum. `TeamMember` is the many-to-many membership join. Each team can own at most one submission. Submissions belong to one event and track and are either draft or submitted. `RubricCriterion.weight` values are validated as a 100% total by organizer endpoints. `Score.values` stores criterion-to-number JSON while `Score.total` stores its weighted result. `JudgeAssignment` is unique per submission/judge. `ConflictOfInterest` links one judge to exactly one team or participant within an event; `active` supports manager overrides, and declaration/override actors and timestamps are retained. Event/judge/target unique indexes prevent duplicate declarations. Vote uniqueness is `(eventId,userId)` and `(eventId,ipHash)`; IP values are HMACed before storage. `AuditLog` is append-only by application convention and has no update/delete API. Score edits use `score.edited` AuditLog entries with old/new values, changed criteria, optional reason, judge, and submission; calibration and ranking are computed from stored scores and require no extra tables.
 
 ## Import/export
 

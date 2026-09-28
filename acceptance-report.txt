@@ -1,19 +1,19 @@
 Dogfood 2026 acceptance self-check
 Report schema: feature|status|evidence|notes
-Run date: 2026-09-27
+Run date: 2026-09-28
 
 T1.auth|PASS|Docker lifecycle E2E verified registration, login, bcrypt-backed JWT cookie session, and role access|No MFA or password recovery.
 T1.events|PARTIAL|Event create/edit API, owner checks, track/prize/rubric schema and creation page compile|No live DB run; rubric/date UI routes need browser verification.
 T1.teams|PARTIAL|Invite URLs and serializable joins enforce event cap in code|Race behavior not exercised against PostgreSQL.
 T1.submissions|PASS|Lifecycle E2E verified draft, submit, and post-deadline edit rejection; unit boundary test passes|Team editing UX remains intentionally compact.
 T1.gallery|PARTIAL|Public DB search/filter and per-viewer stable sort compile|Browser/gallery data not verified against seeded DB.
-T2.assignment|PASS|Lifecycle E2E verified manual and auto assignment; unit verifies balancing, prior loads, and repeat assignment|No conflict-of-interest optimizer.
+T2.assignment|PASS|Lifecycle E2E verified team/participant COI exclusion for manual and auto assignment, audit entries, and shortage warnings; unit tests cover balancing and judge-pool edge cases|Existing assignments with active conflicts are removed only when unscored.
 T2.rubric-score|PASS|Lifecycle E2E verified weighted scoring persistence; unit tests verify 100% weights and bounds|Rubric changes should be frozen operationally before judging.
 T2.isolation|PASS|Lifecycle E2E directly verified participant rejection from assignments/audit and judge-scoped assignment access|Broader fuzz testing remains future work.
 T2.progress-normalization|PASS|Lifecycle E2E verified normalized results route; unit tests cover sample z-scores and one-score zero variance|Manual fixture arithmetic was not separately snapshot-tested.
 T2.csv|PASS|Lifecycle E2E verified reporting CSV content and score CSV round-trip; unit covers formula-safe escaping|All five report variants were not each opened manually.
 T3.vote-comment|PASS|Lifecycle E2E verified concurrent duplicate vote outcome 201/409; database uniqueness and rate-limit unit coverage pass|Proxy must overwrite forwarding headers; shared IPs are intentionally strict.
-T3.audit|PARTIAL|E2E verified participant rejection from audit route; source audit writes are transactional|Append-only is application-enforced, not protected by a database trigger.
+T3.audit|PASS|Lifecycle E2E verified two complete score edits, changed criteria, preserved prior snapshots, admin-only access, and judge/project filters|Append-only is application-enforced, not protected by a database trigger.
 T3.hidden-results|PASS|Lifecycle E2E verified pre-publication results rejection and post-window publication; gallery limiter has unit coverage|Limiter is single-process.
 T4.openapi|PARTIAL|openapi.yaml covers implemented REST endpoints by source comparison|No OpenAPI parser or live response contract run.
 T4.webhooks|PARTIAL|Configured signed webhooks have bounded timeout and stored attempts|No delivery test; explicitly configured hooks make outbound calls.
@@ -23,13 +23,18 @@ T4.embed|PARTIAL|Server-rendered read-only route compiled with no gallery hydrat
 T4.bulk|PASS|Lifecycle E2E verified JSON and score CSV round-trip plus malformed CSV 400 response|Teams/submissions CSV were not each round-tripped in the lifecycle.
 BONUS.normalization-proof|PASS|Dedicated fixture page calls production normalizer; mathematical unit cases pass|Browser rendering not tested.
 BONUS.threat-model|PASS|THREAT-MODEL.md cross-references required threats and actual mitigations|Static review only; no penetration test.
-TEST.unit|PASS|npm test: 8 tests passed|Executed locally.
+BONUS.integrity-coi|PASS|Compose lifecycle E2E verified team and participant declarations, judge scoping, manager review/override, manual/auto exclusions, shortage warnings, and audit records|Persistent COI schema/indexes were reconciled without deleting rows or resetting the volume.
+BONUS.calibration|PASS|Unit tests verify qualification and higher/lower/in-line math; Compose lifecycle E2E verifies judge-private direction and organizer-wide patterns from persisted seeded scores|Only direction labels are exposed; exact averages remain private.
+BONUS.score-edit-audit|PASS|Compose lifecycle E2E verified two appended snapshots retain old/new values, changed criteria, reasons, and admin filtering|Uses the existing AuditLog; append-only remains application-enforced.
+BONUS.tie-break|PASS|Unit tests verify criterion, judge-count, and timestamp order across repeated deterministic runs|Results API and UI compile; browser rendering not tested.
+TEST.unit|PASS|npm test: 11 tests passed|Executed locally.
 TEST.types|PASS|npx tsc --noEmit and prisma validate passed|Executed locally.
-TEST.production-build|PASS|npm run build completed; Next compiled all routes|Executed locally on Node 25; Docker image uses Node 20.
-TEST.e2e|PASS|npm run test:e2e: 1 passed|Executed against the freshly seeded Docker stack after npm ci and Chromium availability.
+TEST.production-build|PASS|Local npm run build and the rebuilt Node 20 Compose image both compiled all routes|Executed successfully; Docker image uses Node 20.
+TEST.e2e|PASS|npm run test:e2e: 1 passed against the rebuilt Compose web/database stack|Verified the full participant, judge, organizer, and admin lifecycle.
 DOCKER.compose-config|PASS|docker compose config --quiet returned success|Syntax only; does not prove the services can build or start.
 DOCKER.prisma-engine|PASS|Dockerfile installs OpenSSL before npm ci; clean rebuild and seed completed without the Prisma engine error|Seed completed successfully against PostgreSQL 16.
-DOCKER.clean-start|PASS|docker compose down -v; docker compose build --no-cache; docker compose up completed; seed and web verified|Postgres seed counts: 10 users, 2 events, 4 teams, 4 submissions, 12 scores, 3 votes.
+DOCKER.clean-start|PASS|Rebuilt Compose images, started PostgreSQL, completed Prisma db push and seed, and verified web HTTP 200|Existing named volume preserved; no volume deletion or data-loss override used.
+PRISMA.coi-migration|PARTIAL|COI migration SQL executed idempotently against the existing matching table; Compose Prisma db push completed|`prisma migrate deploy` requires a baseline for this pre-populated database and returned P3005; no baseline or migration history was fabricated.
 DOCKER.persistence|PASS|docker compose down followed by docker compose up preserved rows|Named postgres_data volume retained seeded records.
 NETWORK.runtime|PARTIAL|Static route/dependency review shows no required external services; hooks are opt-in|No runtime network capture possible.
 DEPENDENCIES.audit|WARN|npm reports 11 advisories (5 moderate, 4 high, 2 critical)|Review npm audit details before deployment; no force-upgrade applied.

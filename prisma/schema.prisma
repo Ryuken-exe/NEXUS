@@ -35,6 +35,10 @@ model User {
   auditEntries  AuditLog[]
   judgeRecords  JudgeRecord[]
   sentJudgeInvites JudgeInvite[] @relation("JudgeInviter")
+  conflictsAsJudge ConflictOfInterest[] @relation("ConflictJudge")
+  conflictsForParticipant ConflictOfInterest[] @relation("ConflictParticipant")
+  declaredConflicts ConflictOfInterest[] @relation("ConflictDeclarer")
+  overriddenConflicts ConflictOfInterest[] @relation("ConflictOverrider")
 }
 
 model Event {
@@ -65,6 +69,7 @@ model Event {
   webhooks         Webhook[]
   records          JudgeRecord[]
   judgeInvites     JudgeInvite[]
+  conflicts        ConflictOfInterest[]
   @@index([startsAt])
 }
 
@@ -96,7 +101,34 @@ model Team {
   createdAt   DateTime     @default(now())
   members     TeamMember[]
   submission  Submission?
+  conflicts   ConflictOfInterest[]
   @@unique([eventId, name])
+}
+
+model ConflictOfInterest {
+  id             String   @id @default(cuid())
+  eventId        String
+  event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  judgeId        String
+  judge          User     @relation("ConflictJudge", fields: [judgeId], references: [id], onDelete: Cascade)
+  teamId         String?
+  team           Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  participantId  String?
+  participant    User?    @relation("ConflictParticipant", fields: [participantId], references: [id], onDelete: Cascade)
+  reason         String   @default("")
+  active         Boolean  @default(true)
+  declaredById   String
+  declaredBy     User     @relation("ConflictDeclarer", fields: [declaredById], references: [id], onDelete: Restrict)
+  overriddenById String?
+  overriddenBy   User?    @relation("ConflictOverrider", fields: [overriddenById], references: [id], onDelete: SetNull)
+  overriddenAt   DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@unique([eventId, judgeId, teamId])
+  @@unique([eventId, judgeId, participantId])
+  @@index([eventId, judgeId, active])
+  @@index([eventId, teamId, active])
+  @@index([eventId, participantId, active])
 }
 
 model TeamMember {

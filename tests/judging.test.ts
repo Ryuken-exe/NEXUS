@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoAssign, isBeforeDeadline, normalizeJudgeScores, validateRubric, weightedScore } from '../src/lib/judging';
+import { autoAssign, calibrationDirection, isBeforeDeadline, normalizeJudgeScores, rankResults, validateRubric, weightedScore } from '../src/lib/judging';
 import { csv, signRecord, verifyRecord } from '../src/lib/security';
 import { createRateLimiter } from '../src/lib/rate-limit';
 
@@ -31,6 +31,41 @@ describe('judging primitives', () => {
         const nextBatch = autoAssign(['a', 'b', 'c'], ['p5'], 2, loads);
         expect(nextBatch.map((pair) => pair.judgeId)).toEqual(['c', 'a']);
         expect(autoAssign(['a', 'b', 'c'], ['p1'], 2, loads, pairs)).toEqual([]);
+    });
+
+    it('excludes conflicted judge and submission pairs during auto-assignment', () => {
+        const pairs = autoAssign(['a', 'b', 'c'], ['p1'], 2, {}, [], [{ judgeId: 'a', submissionId: 'p1' }]);
+        expect(pairs).toEqual([{ judgeId: 'b', submissionId: 'p1' }, { judgeId: 'c', submissionId: 'p1' }]);
+        expect(autoAssign(['a'], ['p1'], 2, {}, [{ judgeId: 'outside-pool', submissionId: 'p1' }])).toEqual([{ judgeId: 'a', submissionId: 'p1' }]);
+    });
+
+    it('compares a judge with qualified peers and returns the correct calibration direction', () => {
+        const rows = [
+            { judgeId: 'target', submissionId: 'p1', total: 80 }, { judgeId: 'target', submissionId: 'p2', total: 82 },
+            { judgeId: 'peer-a', submissionId: 'p1', total: 70 }, { judgeId: 'peer-a', submissionId: 'p2', total: 72 },
+            { judgeId: 'peer-b', submissionId: 'p3', total: 70 }
+        ];
+        expect(calibrationDirection(rows, 'target')).toBe('higher');
+        expect(calibrationDirection(rows.map((row) => ({ ...row, total: row.judgeId === 'target' ? 69 : row.total })), 'target')).toBe('lower');
+        expect(calibrationDirection(rows.map((row) => ({ ...row, total: row.judgeId === 'target' ? 71 : row.total })), 'target')).toBe('in-line');
+        expect(calibrationDirection(rows.slice(0, 1), 'target')).toBe('insufficient-data');
+    });
+
+    it('applies deterministic tie-break order after normalized scores', () => {
+        const tied = [
+            { id: 'consensus', normalizedScore: 1, criterionScores: { impact: 7, craft: 9 }, judgeCount: 4, submittedAt: '2026-09-28T12:00:00Z' },
+            { id: 'earlier', normalizedScore: 1, criterionScores: { impact: 7, craft: 9 }, judgeCount: 3, submittedAt: '2026-09-27T12:00:00Z' },
+            { id: 'criterion', normalizedScore: 1, criterionScores: { impact: 8, craft: 1 }, judgeCount: 2, submittedAt: '2026-09-28T12:00:00Z' },
+            { id: 'later', normalizedScore: 1, criterionScores: { impact: 7, craft: 9 }, judgeCount: 3, submittedAt: '2026-09-28T12:00:00Z' }
+        ];
+        const criteria = [{ id: 'impact', name: 'Impact', weight: 60 }, { id: 'craft', name: 'Craft', weight: 40 }];
+        const firstRun = rankResults(tied, criteria);
+        expect(rankResults([...tied].reverse(), criteria)).toEqual(firstRun);
+        expect(firstRun.map((row) => row.id)).toEqual(['criterion', 'consensus', 'earlier', 'later']);
+        expect(firstRun[0].tieBreakReason).toBeNull();
+        expect(firstRun[1].tieBreakReason).toBe('highest weighted criterion');
+        expect(firstRun[2].tieBreakReason).toBe('number of distinct judges');
+        expect(firstRun[3].tieBreakReason).toBe('earlier submission');
     });
 
     it('normalizes within judges and returns zero when variance is undefined', () => {
