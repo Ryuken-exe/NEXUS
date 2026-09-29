@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { SiteHeader } from '@/components/site-header';
 import { RoleNavigation } from '@/components/role-navigation';
 import { autoAssign } from '@/lib/judging';
@@ -13,12 +13,14 @@ type Assignment = { id: string; judgeId: string; submissionId: string; score: un
 type Judge = { id: string; name: string };
 type Submission = { id: string; title: string; team: { name: string } };
 type Progress = { percent: number; assignments: number; judges: { id: string; name: string; completed: number; assigned: number; percent: number }[] };
+type EventSettings = { id: string; name: string; description: string; teamMin: number; teamMax: number; votingEnabled: boolean };
 
 export default function OrganizerPage({ params }: { params: { slug: string } }) {
     const [assignments, setAssignments] = useState<Assignment[]>([]);
     const [progress, setProgress] = useState<Progress | null>(null);
     const [judges, setJudges] = useState<Judge[]>([]);
     const [submissions, setSubmissions] = useState<Submission[]>([]);
+    const [event, setEvent] = useState<EventSettings | null>(null);
     const [selectedJudges, setSelectedJudges] = useState<string[]>([]);
     const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([]);
     const [mode, setMode] = useState<'manual' | 'auto'>('auto');
@@ -35,10 +37,11 @@ export default function OrganizerPage({ params }: { params: { slug: string } }) 
             apiRequest<Assignment[]>(`/api/events/${params.slug}/assignments`),
             apiRequest<Progress>(`/api/events/${params.slug}/progress`),
             apiRequest<Submission[]>(`/api/events/${params.slug}/submissions`),
-            apiRequest<Judge[]>('/api/judges')
-        ]).then(([assignmentRows, nextProgress, submissionRows, judgeRows]) => {
+            apiRequest<Judge[]>('/api/judges'),
+            apiRequest<EventSettings>(`/api/events/${params.slug}`)
+        ]).then(([assignmentRows, nextProgress, submissionRows, judgeRows, eventSettings]) => {
             if (!active) return;
-            setAssignments(assignmentRows); setProgress(nextProgress); setSubmissions(submissionRows); setJudges(judgeRows);
+            setAssignments(assignmentRows); setProgress(nextProgress); setSubmissions(submissionRows); setJudges(judgeRows); setEvent(eventSettings);
             setSelectedJudges((current) => current.length ? current.filter((id) => judgeRows.some((judge) => judge.id === id)) : judgeRows.map((judge) => judge.id));
             setSelectedSubmissions((current) => current.length ? current.filter((id) => submissionRows.some((submission) => submission.id === id)) : submissionRows.map((submission) => submission.id));
         }).catch((reason) => { if (active) setError(errorMessage(reason)); }).finally(() => { if (active) setLoading(false); });
@@ -67,10 +70,21 @@ export default function OrganizerPage({ params }: { params: { slug: string } }) 
         catch (reason) { setError(errorMessage(reason)); }
         finally { setPublishing(false); }
     }
+    async function updateEvent(formEvent: FormEvent<HTMLFormElement>) {
+        formEvent.preventDefault();
+        if (!event) return;
+        const form = new FormData(formEvent.currentTarget);
+        setError(''); setMessage('');
+        try {
+            const updated = await apiRequest<EventSettings>(`/api/events/${params.slug}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: form.get('name'), description: form.get('description'), teamMin: Number(form.get('teamMin')), teamMax: Number(form.get('teamMax')), votingEnabled: form.get('votingEnabled') === 'on' }) });
+            setEvent(updated); setMessage('Event settings saved.');
+        } catch (reason) { setError(errorMessage(reason)); }
+    }
     return <><SiteHeader /><main className="wrap"><div className="page-title"><div className="eyebrow">Organizer console</div><h1>Event controls</h1><p className="muted">Assignment, review progress, publication, and data exports.</p></div><RoleNavigation role="ORGANIZER" slug={params.slug} />
         <div className="toolbar ui-actions"><Button variant="lime" disabled={publishing} onClick={publish}>{publishing ? 'Publishing…' : 'Publish results'}</Button><Link className="button secondary" href={`/organizer/${params.slug}/bulk`}>Bulk exchange</Link><Link className="button secondary" href={`/events/${params.slug}/results`}>Results</Link></div>
         <Toast message={error} kind="error" /><Toast message={message} />
         {loading ? <div className="form-stack"><Skeleton /><Skeleton className="h-48" /></div> : error && !judges.length ? <Button variant="outline" onClick={() => location.reload()}>Retry</Button> : <>
+            {event && <section><div className="section-head"><h2>Event settings</h2></div><form className="form-stack" onSubmit={updateEvent}><label>Event name<input className="field" name="name" defaultValue={event.name} required maxLength={100} /></label><label>Description<textarea className="field" name="description" defaultValue={event.description} maxLength={5000} /></label><div className="form-grid"><label>Minimum team size<input className="field" type="number" name="teamMin" min={1} max={10} defaultValue={event.teamMin} required /></label><label>Maximum team size<input className="field" type="number" name="teamMax" min={1} max={10} defaultValue={event.teamMax} required /></label></div><label><input type="checkbox" name="votingEnabled" defaultChecked={event.votingEnabled} /> Community voting enabled</label><Button type="submit">Save event settings</Button></form></section>}
             <section className="assignment-builder"><div className="section-head"><h2>Assignments</h2><span className="muted">Select judges and submitted projects</span></div>
                 {submissions.length === 0 ? <EmptyState title="No submitted projects" description="Assignments can be created after participants submit projects." /> : <>
                     <div className="assignment-mode" role="group" aria-label="Assignment mode"><Button variant={mode === 'auto' ? 'default' : 'outline'} onClick={() => setMode('auto')}>Auto-balance</Button><Button variant={mode === 'manual' ? 'default' : 'outline'} onClick={() => setMode('manual')}>Manual batch</Button></div>

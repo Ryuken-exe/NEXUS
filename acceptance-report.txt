@@ -1,7 +1,7 @@
 Dogfood 2026 acceptance self-check
 Report schema: feature|status|evidence|notes
-Run date: 2026-09-28
-Final close-out: verified after the T1/T2 refactor and guard audit. The application was rebuilt, unit tests passed, Docker Compose started successfully, and the web app responded over HTTP.
+Run date: 2026-09-29
+Final close-out: verified after fresh-volume Prisma migration deployment and live T1 browser checks. Both migrations applied in order, the seed completed, and the homepage returned HTTP 200.
 
 Route guard audit (verified)
 route|allowed roles|guard present|notes
@@ -25,10 +25,10 @@ route|allowed roles|guard present|notes
 
 
 T1.auth|PASS|Docker lifecycle E2E verified registration, login, bcrypt-backed JWT cookie session, and role access|No MFA or password recovery.
-T1.events|PARTIAL|Event create/edit API, owner checks, track/prize/rubric schema and creation page compile|No live DB run; rubric/date UI routes need browser verification.
-T1.teams|PARTIAL|Invite URLs and serializable joins enforce event cap in code|Race behavior not exercised against PostgreSQL.
+T1.events|VERIFIED|Chromium browser test created an event in the UI, edited its name and team cap, and PostgreSQL read-back showed the edited values|Creation and basic edit persistence verified; date/rubric editing remains outside the current UI.
+T1.teams|VERIFIED|Chromium browser test created a team, joined a second account through its invite URL, and confirmed a third account was rejected; PostgreSQL showed exactly two members|Sequential cap enforcement verified; concurrent join race behavior was not exercised.
 T1.submissions|PASS|Lifecycle E2E verified draft, submit, and post-deadline edit rejection; unit boundary test passes|Team editing UX remains intentionally compact.
-T1.gallery|PARTIAL|Public DB search/filter and per-viewer stable sort compile|Browser/gallery data not verified against seeded DB.
+T1.gallery|VERIFIED|Chromium browser test searched for Civic Signal, filtered Climate to Canopy, and confirmed stable ordering across reloads|Verified against the four seeded projects across three tracks.
 T2.assignment|PASS|Lifecycle E2E verified team/participant COI exclusion for manual and auto assignment, audit entries, and shortage warnings; unit tests cover balancing and judge-pool edge cases|Existing assignments with active conflicts are removed only when unscored.
 T2.rubric-score|PASS|Lifecycle E2E verified weighted scoring persistence; unit tests verify 100% weights and bounds|Rubric changes should be frozen operationally before judging.
 T2.isolation|PASS|Lifecycle E2E directly verified participant rejection from assignments/audit and judge-scoped assignment access|Broader fuzz testing remains future work.
@@ -52,11 +52,11 @@ BONUS.tie-break|PASS|Unit tests verify criterion, judge-count, and timestamp ord
 TEST.unit|PASS|npm test: 11 tests passed|Executed locally.
 TEST.types|PASS|npx tsc --noEmit and prisma validate passed|Executed locally.
 TEST.production-build|PASS|Local npm run build and the rebuilt Node 20 Compose image both compiled all routes|Executed successfully; Docker image uses Node 20.
-TEST.e2e|PASS|npm run test:e2e: 1 passed against the rebuilt Compose web/database stack|Verified the full participant, judge, organizer, and admin lifecycle.
+TEST.e2e|PASS|`npm run test:e2e -- --reporter=line`: 2 passed against the rebuilt Compose web/database stack|Includes the participant/judge/organizer/admin API lifecycle and live T1 browser verification.
 DOCKER.compose-config|PASS|docker compose config --quiet returned success|Syntax only; does not prove the services can build or start.
 DOCKER.prisma-engine|PASS|Dockerfile installs OpenSSL before npm ci; clean rebuild and seed completed without the Prisma engine error|Seed completed successfully against PostgreSQL 16.
-DOCKER.clean-start|PASS|Rebuilt Compose images, started PostgreSQL, completed Prisma db push and seed, and verified web HTTP 200|Existing named volume preserved; no volume deletion or data-loss override used.
-PRISMA.coi-migration|PARTIAL|COI migration SQL executed idempotently against the existing matching table; Compose Prisma db push completed|`prisma migrate deploy` requires a baseline for this pre-populated database and returned P3005; no baseline or migration history was fabricated.
+DOCKER.clean-start|PASS|`docker compose down -v --remove-orphans` followed by `docker compose up --build --wait` created a new volume, applied both Prisma migrations, seeded successfully, and reached healthy DB/web services; homepage returned HTTP 200|Fresh-volume startup tested on 2026-09-29.
+PRISMA.coi-migration|VERIFIED|After volume deletion, `prisma migrate deploy` applied `20260927170000_judging_integrity` and `20260928120000_conflicts_of_interest` in order, then seeding completed|Generated empty-to-current-schema baseline precedes the idempotent COI constraint migration; tested against a newly created PostgreSQL volume.
 DOCKER.persistence|PASS|docker compose down followed by docker compose up preserved rows|Named postgres_data volume retained seeded records.
 NETWORK.runtime|PARTIAL|Static route/dependency review shows no required external services; hooks are opt-in|No runtime network capture possible.
-DEPENDENCIES.audit|WARN|npm reports 11 advisories (5 moderate, 4 high, 2 critical)|Review npm audit details before deployment; no force-upgrade applied.
+DEPENDENCIES.audit|WARN|2026-09-29 `npm audit` reports 11 vulnerable package entries: 2 critical, 4 high, 5 moderate; plain `npm audit fix` made no changes|Critical: direct production `next@14.2.35` (includes two RCE advisories; npm fix requires breaking `next@16.3.6`) and direct dev `vitest@2.1.9` (Vitest UI-server arbitrary-file-read/execute advisory; npm fix requires breaking `vitest@4.1.11`). High package entries: direct dev `@playwright/test` and transitive dev `playwright` (browser-download TLS verification); `postcss` (direct dev plus nested under production Next, source-map file disclosure/path traversal); transitive dev `vite` under Vitest (Windows path-deny bypass). Next also reports multiple high-severity advisories under its critical aggregate. Vitest 2.1.9 unit and E2E tests pass. No force upgrade applied; Next/Vitest majors and CSV parser major deferred. T4 unchanged.

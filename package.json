@@ -13,7 +13,7 @@
         "db:generate": "prisma generate",
         "db:push": "prisma db push",
         "db:seed": "tsx prisma/seed.ts",
-        "db:setup": "prisma db push && prisma db seed"
+        "db:setup": "prisma migrate deploy && prisma db seed"
     },
     "prisma": {
         "seed": "tsx prisma/seed.ts"
@@ -46,6 +46,6 @@
         "tailwindcss": "3.4.17",
         "tsx": "4.19.2",
         "typescript": "5.7.2",
-        "vitest": "2.1.8"
+        "vitest": "2.1.9"
     }
 }
