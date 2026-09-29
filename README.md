@@ -1,50 +1,77 @@
 # Dogfood 2026
 
-Dogfood 2026 is a local-first hackathon platform for event setup, team formation, project submissions, weighted judging, normalization, community voting, results, exports, certificates, and auditability. It runs as a Next.js 14 application backed by PostgreSQL 16 and Prisma, with custom JWT authentication and no required hosted services.
+Dogfood 2026 is a local-first platform for running hackathons and other judged events. Organizers configure events, invite judges, and publish rubrics; participants form teams and submit projects; judges score assigned submissions; and organizers publish results, export records, and issue certificates.
 
-## Prerequisites
+The application is built with Next.js 14, TypeScript, PostgreSQL 16, and Prisma. Docker Compose runs the app and database together, including migrations and demo-data seeding. No hosted services are required for core operation.
+
+## Features
+
+- Event setup, team formation, submissions, and deadline enforcement
+- Judge invitations, assignment balancing, rubric scoring, and score normalization
+- Conflict-of-interest declarations, calibration, and score history
+- Public project gallery, community voting, and comments
+- Organizer-controlled results, CSV and bulk data exchange, and PDF certificates
+- Audit records, signed judge records, and optional signed webhooks
+- Role-based access for participants, judges, organizers, and administrators
+
+## Run with Docker
+
+### Requirements
 
 - Docker Desktop with the Linux container engine enabled
 - Docker Compose v2 (`docker compose`)
 
-Node.js, npm, PostgreSQL, Redis, and a manually created `.env` file are not required for the Docker path.
+Node.js, npm, and a local PostgreSQL installation are not needed for this setup.
 
-## Clone and run
+### Start the app
 
 ```sh
 git clone <repo-url>
 cd <repo-folder>
-cp .env.example .env
-docker compose up
+docker compose up --build
 ```
 
-The `cp` step is optional because Compose has safe demo defaults, but it documents the available configuration variables. On Windows PowerShell, use `Copy-Item .env.example .env` instead. Compose builds the application, waits for PostgreSQL, applies the Prisma schema, seeds fixture data automatically, and then starts the web service. No manual migration or seed command is required.
+Compose starts PostgreSQL, applies Prisma migrations, seeds demo data, and then starts the web app. Open [http://localhost:3000](http://localhost:3000). To use a different host port, set `WEB_PORT`, for example `WEB_PORT=3010 docker compose up --build`.
 
-Open [http://localhost:3000](http://localhost:3000). Port `3000` is configurable with `WEB_PORT`, for example `WEB_PORT=3010 docker compose up`; use the matching URL if port 3000 is already occupied.
+Compose includes demo-only defaults. To review or override them, copy `.env.example` to `.env` (`Copy-Item .env.example .env` in PowerShell; `cp .env.example .env` in other shells).
 
-## Seeded accounts
+### Demo accounts
 
-All seeded accounts use the demo password `dogfood-demo-2026`.
+All seeded accounts use the password `dogfood-demo-2026`.
 
 | Role | Email |
-|---|---|
+| --- | --- |
 | Participant | `participant1@dogfood.local` |
 | Judge | `judge1@dogfood.local` |
 | Organizer | `organizer@dogfood.local` |
 | Admin | `admin@dogfood.local` |
 
-Additional seeded judges are `judge2@dogfood.local` and `judge3@dogfood.local`; additional participants are `participant2@dogfood.local` through `participant5@dogfood.local`.
+The seed also creates `judge2@dogfood.local`, `judge3@dogfood.local`, and participants `participant2@dogfood.local` through `participant5@dogfood.local`.
+
+## Local development
+
+Install Node.js and npm, then start PostgreSQL locally or with Compose. With PostgreSQL available at the URL in `.env.example`:
+
+```sh
+Copy-Item .env.example .env
+npm ci
+npm run db:generate
+npm run db:setup
+npm run dev
+```
+
+On macOS or Linux, replace the first command with `cp .env.example .env`. The app is available at [http://localhost:3000](http://localhost:3000). `db:setup` applies migrations and seeds the database.
 
 ## Tests
 
-The application image includes the test dependencies. With the Compose stack running, run unit tests inside a disposable container:
+Run unit tests and TypeScript checks in the app container while the Compose stack is available:
 
 ```sh
 docker compose run --rm web npm test
 docker compose run --rm web npm run typecheck
 ```
 
-The Playwright lifecycle test is designed to run alongside the seeded stack. It uses the project's test configuration and requires a local Node/npm installation because Playwright launches the test web server:
+The Playwright end-to-end suite uses a local Node/npm installation and the seeded app:
 
 ```sh
 npm ci
@@ -52,37 +79,36 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Alternatively, run the same checks from a Node-enabled test container or CI runner pointed at `http://localhost:3000`. The unit suite covers scoring, normalization, assignment balancing, deadline boundaries, CSV escaping, signatures, and rate limiting. See `acceptance-report.txt` for the latest verified status.
+The unit tests cover scoring, normalization, assignment balancing, deadline boundaries, CSV escaping, signatures, and rate limiting. See [acceptance-report.txt](acceptance-report.txt) for the recorded acceptance status.
 
-## Tear down
+## Stop and reset
 
-Stop containers while preserving the named PostgreSQL volume:
+Stop the containers and retain the database volume:
 
 ```sh
 docker compose down
 ```
 
-For a completely fresh database and seed:
+To remove the database volume and start with a fresh seed:
 
 ```sh
 docker compose down -v
 docker compose up --build
 ```
 
-## Documentation
+## Project documentation
 
-- [ARCHITECTURE.md](ARCHITECTURE.md)
-- [DATA-MODEL.md](DATA-MODEL.md)
-- [JUDGING.md](JUDGING.md)
-- [THREAT-MODEL.md](THREAT-MODEL.md)
-- [openapi.yaml](openapi.yaml)
-- [demo-video-script.md](demo-video-script.md)
-- [acceptance-report.txt](acceptance-report.txt)
+- [Architecture](ARCHITECTURE.md)
+- [Data model](DATA-MODEL.md)
+- [Judging and scoring](JUDGING.md)
+- [Threat model](THREAT-MODEL.md)
+- [REST API specification](openapi.yaml)
+- [Demo video script](demo-video-script.md)
 
 ## Configuration and security
 
-`.env.example` lists local development and Docker override variables. The checked-in Compose values are demo-only defaults, not production secrets. For deployment, set high-entropy `JWT_SECRET` and `JUDGE_SIGNING_SECRET`, use a private PostgreSQL password, and serve through HTTPS. Configured webhooks are the only optional feature that makes outbound runtime requests; the core platform has no hosted-service dependency.
+See `.env.example` for the available settings. Compose's default credentials and signing keys are for local demos only. Deployments should use strong, independent `JWT_SECRET` and `JUDGE_SIGNING_SECRET` values, a private PostgreSQL password, and HTTPS. Configured webhooks are the only feature that intentionally makes outbound runtime requests.
 
 ## License
 
-Released under the MIT License. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
